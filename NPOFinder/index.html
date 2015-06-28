@@ -1,0 +1,265 @@
+<!doctype html>
+<!--
+  name:           Jonathan Klaiber
+  student nr:     10004077
+  Programmeer Project Juni 2015
+
+  Inspired by 
+  "https://developers.google.com/maps/documentation
+   /javascript/examples/places-searchbox"
+   (Google Maps functionality)
+
+  Libraries:
+  Google Maps API
+  D3.js
+  NPO Backstage API
+  JSON
+
+  Note:
+  The HTML5 validator on https://validator.w3.org/nu/
+  finds three errors all concering the
+  link to the Google API:
+  "<script src="https://maps.googleapis.com/maps/api/js?
+            v=3.exp&signed_in=true&libraries=places">"
+  I recognized the errors but I'm negelectubg them because
+  the API reference has to be stated in this way.
+  
+-->
+<html lang="en" xml:lang="en">
+  <head>      
+    <title>NPO Geo Finder</title>
+    <link rel="stylesheet" type="text/css" href="css/index.css"/>
+    <link rel="stylesheet" type="text/css" href="css/mb.slider.css"/>
+    <link rel="stylesheet" type="text/css" href="css/episodelist.css"/>
+    <link rel="stylesheet" type="text/css" href="css/filter.css"/>
+    <link rel="stylesheet" type="text/css" href="css/googlemaps.css"/>
+    <link rel="stylesheet" type="text/css" href="css/resultbar.css"/>
+    <link href='http://fonts.googleapis.com/css?family=Roboto:300,400'
+          rel='stylesheet' type='text/css'>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  </head>
+  <body>
+    <script src="js/apicommunication.js"></script>
+    <script src="js/d3.js"></script>
+    <script src="js/datetransformation.js"></script>
+    <script src="js/episodelist.js"></script>
+    <script src="js/filter.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?
+                v=3.exp&signed_in=true&libraries=places">
+    </script>
+    <script src="js/marker.js"></script>
+    <script src="js/resultbar.js"></script>
+    <script>
+      "use strict";
+      // Global constants
+      var markers = [];
+      var listArray = [];
+      var markerArray = [];
+
+      function initialize() {
+        /*
+        The main function to load the Google Maps Map
+        and its functionality. The NPO API communication
+        also takes place here in the Google Maps API calllback
+        */
+        // Constants
+        var nederlandLatLng ={lat1: 51.5, lng1: 5, lat2: 53.5, lng2: 7};
+        var requestSize = 100;
+        // Load the filter function
+        LoadFilter();
+        // Initialise map
+        var map = new google.maps.Map(document.getElementById("map-canvas"), {
+          mapTypeId: google.maps.MapTypeId.ROADMAP
+        });
+        // Define start point without location entry (Netherlands)
+        var defaultBounds = new google.maps.LatLngBounds(
+            new google.maps.LatLng(nederlandLatLng.lat1, nederlandLatLng.lng1),
+            new google.maps.LatLng(nederlandLatLng.lat2, nederlandLatLng.lng2));
+        map.fitBounds(defaultBounds);
+        // Creates the search box and link it to the UI element.
+        var input = (document.getElementById("pac-input"));
+        map.controls[google.maps.ControlPosition.TOP_LEFT].push(input);
+        var searchBox = new google.maps.places.SearchBox((input));
+        // Listen for the event fired when the user selects a (new) location
+        google.maps.event.addListener(searchBox, "places_changed", function() {
+          // Removes all current markers
+          deleteMarkers();
+          // Removes current list
+          if(!d3.select("#episodelist").select("ul").empty()) {
+            d3.select("#episodelist").select("ul").remove();
+          }
+          var places = searchBox.getPlaces();
+          // Return noting if no place is found
+          if (places.length === 0) {
+            return;
+          }
+          // Getting data for the search marker
+          var bounds = new google.maps.LatLngBounds();
+          for (var i = 0, place; place = places[i]; i++) {
+            // Search marker icon is created
+            var image = {
+              url: place.icon,
+              size: new google.maps.Size(71, 71),
+              origin: new google.maps.Point(0, 0),
+              anchor: new google.maps.Point(17, 34),
+              scaledSize: new google.maps.Size(25, 25)
+            };
+            // Placing the search marker
+            var marker = new google.maps.Marker({
+              map: map,
+              icon: image,
+              title: place.name,
+              position: place.geometry.location
+            });
+            // New location marker saved in 
+            // markers array
+            markers.push(marker);
+            // Update bounds for new location
+            bounds.extend(place.geometry.location);
+            // API request created
+            var req = createRequest();
+            // Location information
+            var markerGeo = place.geometry.location;
+            var markerName = place.name;
+            // Create the callback:
+            req.onreadystatechange = function() {
+              if (req.readyState != 4) {
+                return; 
+              } 
+              if (req.status != 200) {
+                // Request failure handled here
+                return;
+              }
+              // Resp contains the Query response text
+              var resp = req.responseText;
+              // JSON Query response is parsed 
+              var obj = JSON.parse(resp);
+              var hits = obj.hits.hits;
+              listArray = [];
+              markerArray = [];
+              var item;
+              for (var i = 0; i < hits.length; i++) {
+                // The default program option is NPO journalistiek 
+                var program = "npo_journalistiek";
+                // Correct program is attached to NPO item 
+                if(hits[i]._source.Broadcasters !== null) {
+                    program = hits[i]._source.Broadcasters[0].Name;
+                    var checkProgram = program.toLowerCase();
+                    // Program filter is applied on the incoming data
+                    if(checkProgram == "kro-ncrv") {
+                      checkProgram = "kroncrv";
+                    }
+                    if(!programChecked[checkProgram]) {
+                      continue;
+                    }
+                }
+                // Items are "split" into location (markerArray) and
+                // non location (listArray) items
+                if(hits[i]._source.Locations !== null) {
+                  item = new ItemMarker(
+                    hits[i]._source.Id,
+                    hits[i]._source.Title,
+                    program,
+                    parseDate(hits[i]._source.Date.replaceAt(10," ")),
+                    hits[i]._source.Locations[0].Name,
+                    hits[i]._source.Locations[0].GeoPoint.Latitude,
+                    hits[i]._source.Locations[0].GeoPoint.Longitude,
+                    hits[i]._source.Url, 
+                    hits[i]._source.description,
+                    [markerGeo.A, markerGeo.F]);
+                  markerArray.push(item);
+                } else {
+                  item = new ItemMarker(
+                    hits[i]._source.Id,
+                    hits[i]._source.Title,
+                    program,
+                    parseDate(hits[i]._source.Date.replaceAt(10," ")),
+                    markerName,
+                    null,
+                    null,
+                    hits[i]._source.Url, 
+                    hits[i]._source.description,
+                    [markerGeo.A, markerGeo.F]);
+                  listArray.push(item);
+                }
+              }
+              for (var j = 0; j < markerArray.length; j++) {
+                  placeMarker(map, markerArray[j]);
+              }
+              // Loading result bar
+              DisplayResultBar(markerName, markerArray, listArray);
+              // Load episodelist
+              LoadEpisodelist();
+            };
+            // Make connection with API
+            req.onreadystatechange();
+            // API url
+            var url = "http://backstage-api.openstate.eu/"
+                      + "v0/journalistiek/search";
+            // Making a POST request to API
+            // query request is limited to 100 items (size: 100)
+            req.open("POST", url, true);
+            var query = '{"query": "' 
+                        + place.name 
+                        + '", "filters":{"date": {"from": "'
+                        + queryDate(from) 
+                        + '", "to": "' 
+                        + queryDate(to) 
+                        + '"}}, "size":"'
+                        + requestSize
+                        + '", "sort": "date"}';
+            req.setRequestHeader("Content-Type",
+                                 "application/x-www-form-urlencoded");
+            // Sending the request
+            req.send(query);
+          }
+          // Adjust searchbox to viewpoint borders
+          map.fitBounds(places[0].geometry.viewport);
+        });
+        // Bias the SearchBox results towards places that
+        //  are within the bounds of the current map's viewport.
+        google.maps.event.addListener(map, "bounds_changed", function() {
+          var bounds = map.getBounds();
+          searchBox.setBounds(bounds);
+        });
+      }
+      // Loading the map
+      google.maps.event.addDomListener(window, "load", initialize);
+    </script>
+    <input id = "pac-input" class = "controls" type = "text" placeholder = "Search Box">
+    <div id = "map-canvas"></div>
+    <div id = "pagetitle" class = "intro"> 
+      NPO Geo Finder
+    </div>
+    <div id = "introtext" class = "intro">
+      The NPO Geo Finder enables you to obtain NPO Journalistiek items like
+      documentatries or news reports by location.
+    </div>
+     <div id = "introdescription" class = "intro"> 
+      Please enter a location in the search box on the map.
+      <br>
+      The location you typed in will be used 
+      as keyword to search the NPO Backstage API.
+      You can refine your search
+      by clicking on the "Filter" bar. The filter bar gives you the possiblity
+      to search selectivly for programs and time periods.
+    </div>
+    <div id = "introresults" class = "intro">
+      The search result with a location are depicted on the map. Some search results
+      do not have a location, they are depicted on a white panel next to the map.
+      <br>
+      <br>
+      Click on a search result if you want to get more information!
+    </div>
+    <div id = "filterdiv" class = "intro"> 
+      <div id = "arrowdiv">
+        <div id = "arrow-right" class = "arrow"></div>
+      </div>
+      <div id = "filtertext"> Filter </div>
+    </div>
+    <div id = "episodelist"></div>
+    <div id = "results" class = "intro"></div>
+  </body>
+</html>
+
+
