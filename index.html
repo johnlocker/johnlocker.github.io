@@ -3,18 +3,15 @@
   name:           Jonathan Klaiber
   student nr:     10004077
   Programmeer Project Juni 2015
-
   Inspired by 
   "https://developers.google.com/maps/documentation
    /javascript/examples/places-searchbox"
    (Google Maps functionality)
-
   Libraries:
   Google Maps API
   D3.js
   NPO Backstage API
   JSON
-
   Note:
   The HTML5 validator on https://validator.w3.org/nu/
   finds three errors all concering the
@@ -55,7 +52,6 @@
       var markers = [];
       var listArray = [];
       var markerArray = [];
-
       function initialize() {
         /*
         The main function to load the Google Maps Map
@@ -153,6 +149,12 @@
                       continue;
                     }
                 }
+                var itemUrl = "";
+                if(hits[i]._source.Mid !== null) {
+                  itemUrl = "http://www.npo.nl/" + hits[i]._source.Mid;
+                } else {
+                  itemUrl = hits[i]._source.Url;
+                }
                 // Items are "split" into location (markerArray) and
                 // non location (listArray) items
                 if(hits[i]._source.Locations !== null) {
@@ -164,7 +166,7 @@
                     hits[i]._source.Locations[0].Name,
                     hits[i]._source.Locations[0].GeoPoint.Latitude,
                     hits[i]._source.Locations[0].GeoPoint.Longitude,
-                    hits[i]._source.Url, 
+                    itemUrl, 
                     hits[i]._source.description,
                     [markerGeo.A, markerGeo.F]);
                   markerArray.push(item);
@@ -177,7 +179,7 @@
                     markerName,
                     null,
                     null,
-                    hits[i]._source.Url, 
+                    itemUrl, 
                     hits[i]._source.description,
                     [markerGeo.A, markerGeo.F]);
                   listArray.push(item);
@@ -261,5 +263,3 @@
     <div id = "results" class = "intro"></div>
   </body>
 </html>
-
-

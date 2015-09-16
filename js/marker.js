@@ -56,9 +56,7 @@ function placeMarker(map, item) {
 	    			 // info link
 	    			 '<b>Link: </b> <a href="' + item.link +
 	    			 ' "target=_blank">' +
-	    			 item.link.substring(item.link.indexOf("//") 
-	    			 					 + 2, item.link.indexOf(".nl") 
-	    			 					 + 3) 
+	    			 item.link 
 	    			 + "</a>" + "<br>" +
 	    			 // info distance
 	    			"<b>Distance to Search Marker: </b>" +
@@ -106,7 +104,7 @@ function ItemMarker(id,
 					locationChar, 
 					latitude, 
 					longitude, 
-					link, 
+					url, 
 					description, 
 					locationMarker) {
 	// Item marker object that contains item information
@@ -116,7 +114,7 @@ function ItemMarker(id,
 	this.locationChr = locationChar;
 	this.locationLat = latitude;
 	this.locationLong = longitude;
-	this.link = link;
+	this.link = url;
 	this.description = description;
 	this.distance = distance(locationMarker[0],
 	                         locationMarker[1],
